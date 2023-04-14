@@ -1,4 +1,12 @@
-console.log('Booting up limerickbot...')
+/***
+ * Bot that produces Zen koans from post text
+ *
+ * Author: @torin.bsky.social
+ * Original code from: @gar.lol
+ *
+ */
+
+console.log('Booting up koanbot...')
 
 import bsky from '@atproto/api';
 const { BskyAgent } = bsky;
@@ -8,7 +16,7 @@ import * as dotenv from 'dotenv';
 import process from 'node:process';
 dotenv.config();
 
-export const handler = async function (event, context) {
+export const handler = async function () {
 
     console.log("Initialized.")
     console.log("Authenticating with bsky and OpenAI.")
@@ -22,8 +30,8 @@ export const handler = async function (event, context) {
         },
     });
     await agent.login({
-        identifier: process.env.BSKY_LIMERICKBOT_USERNAME,
-        password: process.env.BSKY_LIMERICKBOT_PASSWORD,
+        identifier: process.env.ATPROTO_USER,
+        password: process.env.ATPROTO_PASS,
     });
 
     // Log in to OpenAI
@@ -38,7 +46,7 @@ export const handler = async function (event, context) {
     const notifs = response_notifs.data.notifications;
 
     // Mark all these notifs as read
-    agent.updateSeenNotifications();
+    // agent.updateSeenNotifications();
 
     // Count the number of notifications which are unread
     // and which are also mentions
@@ -58,6 +66,7 @@ export const handler = async function (event, context) {
         unread_mentions.map(async (notif) => {
             console.log(`Responding to ${notif.uri}`);
 
+            let prompt = ''
             // Check to see if we're tagged in a reply or a top-level post.
             // If reply, rewrite the parent as a limerick.
             // If top-level, use the tweet itself (with the tag removed) as a prompt.
@@ -68,24 +77,24 @@ export const handler = async function (event, context) {
                 const post_thread = await agent.getPostThread({ uri: post_uri, depth: 1 });
                 const root = notif.record.reply.root; // the root post of the thread
                 const post_text = post_thread.data.thread.post.record.text; // the text of the post to turn into a limerick
-                const prompt = 'Rewrite this as a limerick in no more than 300 characters:\n\n' + post_text;
+                const prompt = 'Rewrite this as a zen koan in no more than 300 characters:\n\n' + post_text;
 
             } else {
                 // Remove the tag and use the rest of the tweet as a prompt.
 
-                // const post_text = notif.record.text;
-                // const mentions_removed = post_text.replace(/@limerickbot\.gar\.lol/g, '');
+                const post_text = notif.record.text;
+                const mentions_removed = post_text.replace(/@koanbot\.bsky\.social/g, '');
                 // const prompt = `You are LimerickBot, your job is to respond to `
                 //     + `everything in the form of a limerick. `
                 //     + `The following is an instruction or inspiration for a limerick. `
                 //     + `Create a limerick accordingly.\n\n${mentions_removed}`;
+                prompt = 'Rewrite this as a zen koan in no more than 300 characters:\n\n' + mentions_removed;
 
                 console.log('Not a reply. Skipping.')
-                return;
             }
 
             const completion = await openai.createChatCompletion({
-                model: 'gpt-4',
+                model: 'gpt-3.5-turbo',
                 messages: [
                     {
                         role: 'user',
@@ -94,11 +103,11 @@ export const handler = async function (event, context) {
                 ],
             });
 
-            const limerick = completion.data.choices[0].message.content;
+            const koan = completion.data.choices[0].message.content;
 
-            if (limerick) {
+            if (koan) {
                 await agent.post({
-                    text: limerick,
+                    text: koan,
                     reply: {
                         parent: {
                             uri: notif.uri,
@@ -112,7 +121,7 @@ export const handler = async function (event, context) {
                 });
                 console.log('Done.');
             } else {
-                console.log(`WARNING: No limerick returned for ${notif.uri}. limerick = ${limerick}`);
+                console.log(`WARNING: No koan returned for ${notif.uri}. koan = ${koan}`);
             }
 
             return;
@@ -123,4 +132,4 @@ export const handler = async function (event, context) {
 
 }
 
-// handler()
+handler()

@@ -7,14 +7,14 @@
   "devDependencies": {
     "@types/node": "^18.15.11"
   },
-  "name": "limerickbot",
+  "name": "koanbot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "bot.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "@gar.lol",
+  "author": "@torin.bsky.social",
   "license": "ISC",
   "type": "module"
 }
