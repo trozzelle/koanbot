@@ -9,6 +9,6 @@ Derivative of limerickbot by @gar.lol
 
 ### Run the script locally
 ```
-node bot.js
+node koanbot.js
 ```
 
