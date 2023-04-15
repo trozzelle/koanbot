@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import bsky from "@atproto/api";
 import oai from "openai";
 import * as dotenv from "dotenv";
