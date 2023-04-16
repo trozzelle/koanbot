@@ -6,6 +6,6 @@ import { koanbot } from "./koanbot.js";
  *
  * Set to run every 10 seconds
  */
-schedule.scheduleJob("10 * * * * ", async function () {
+schedule.scheduleJob("*/10 * * * * *", async function () {
   await koanbot();
 });
