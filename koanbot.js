@@ -73,7 +73,8 @@ async function getUnreadMentions(agent) {
  */
 function generatePrompt(record) {
   const post_text = record.text;
-  const mentions_removed = post_text.replace(/@\w+\.\w+/g, "");
+  // Regex should match handles of any depth
+  const mentions_removed = post_text.replace(/@[\w.]+(?=\s|$)/g, "");
 
   return `As a wise zen master, carefully craft a zen koan based on the following text, using no more than 275 characters. Stay on topic and avoid generating any off-topic or inappropriate content:\n\n"${mentions_removed}"`;
 }
