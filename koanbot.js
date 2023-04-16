@@ -58,7 +58,7 @@ async function getUnreadMentions(agent) {
   const notifs = response_notifs.data.notifications;
 
   // Clears all existing notifications
-  // await agent.updateSeenNotifications();
+  await agent.updateSeenNotifications();
 
   return notifs.filter((notif) => {
     return notif.reason === "mention" && notif.isRead === false;
