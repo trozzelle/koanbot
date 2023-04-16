@@ -58,7 +58,7 @@ async function getUnreadMentions(agent) {
   const notifs = response_notifs.data.notifications;
 
   // Clears all existing notifications
-  await agent.updateSeenNotifications();
+  // await agent.updateSeenNotifications();
 
   return notifs.filter((notif) => {
     return notif.reason === "mention" && notif.isRead === false;
@@ -77,6 +77,18 @@ function generatePrompt(record) {
   const mentions_removed = post_text.replace(/@[\w.]+(?=\s|$)/g, "");
 
   return `As a wise zen master, carefully craft a zen koan based on the following text, using no more than 275 characters. Stay on topic and avoid generating any off-topic or inappropriate content:\n\n"${mentions_removed}"`;
+}
+
+/***
+ * Likes the post identified by the provided uri and cid
+ *
+ * @param agent
+ * @param uri
+ * @param cid
+ * @returns {Promise<void>}
+ */
+async function likePost(agent, uri, cid) {
+  await agent.like(uri, cid)
 }
 
 /***
@@ -136,7 +148,9 @@ export async function koanbot() {
       let prompt = "";
       let root = {};
 
-      // This is redundant and should be refactored
+      // Like the notifying post to indicate message received
+      await likePost(agent, notif.uri, notif.cid)
+
 
       // If reply to existing thread, we need to grab
       // the URI and CID of the root post in the thread
@@ -147,6 +161,7 @@ export async function koanbot() {
           depth: 1,
         });
         root = notif.record.reply.root;
+
         prompt = generatePrompt(post_thread.data.thread.post.record);
 
         logger.info(prompt);
