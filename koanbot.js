@@ -94,7 +94,7 @@ async function generateCompletion(openai, prompt, maxLength = 300) {
   }
 }
 
-async function main() {
+export async function koanbot() {
   console.log("Booting up koanbot...");
 
   // Authenticate with APIs and retrieve unread mentions
@@ -192,4 +192,4 @@ async function main() {
   console.log("Completed async responses. Goodbye.");
 }
 
-main();
+koanbot();
