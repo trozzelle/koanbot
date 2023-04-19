@@ -1,5 +1,5 @@
 import schedule from "node-schedule";
-import { koanbot } from "./koanbot.js";
+import { koanbot } from "./koanbot";
 
 /***
  * Scheduler handler for bot to be used with PM2

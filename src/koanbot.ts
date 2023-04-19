@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import bsky from "@atproto/api";
-import oai from "openai";
+// @ts-ignore
+const { BskyAgent } = bsky
+import {Configuration, OpenAIApi} from "openai";
 import * as dotenv from "dotenv";
 import process from "node:process";
 import pino from "pino";
@@ -12,6 +14,33 @@ dotenv.config();
 // Using pino for logging
 const logger = pino();
 
+type Mention = {
+  uri: string;
+  cid: string;
+  record: any;
+  reason: string;
+  isRead: boolean;
+};
+
+type CompletionChoice = {
+  message: { content: string };
+};
+
+type Completion = {
+  data: { choices: CompletionChoice[] };
+};
+
+type PostMeta = {
+  parent: {
+    uri: string
+    cid: string
+  }
+  root: {
+    uri: string
+    cid: string
+  }
+}
+
 /**
  * Authenticates with the Bluesky API
  *
@@ -19,8 +48,9 @@ const logger = pino();
  *
  * @returns {Promise<bsky.BskyAgent>}
  */
-async function authenticateBsky() {
-  const agent = new bsky.BskyAgent({
+// @ts-ignore
+async function authenticateBsky(): Promise<BskyAgent> {
+  const agent = new BskyAgent({
     service: "https://bsky.social",
   });
   await agent.login({
@@ -38,13 +68,15 @@ async function authenticateBsky() {
  *
  * @returns {Promise<OpenAIApi>}
  */
-async function authenticateOpenAI() {
-  const configuration = new oai.Configuration({
+async function authenticateOpenAI(): Promise<OpenAIApi> {
+  const configuration = new Configuration({
     organization: process.env.OPENAI_ORG,
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  return new oai.OpenAIApi(configuration);
+  const oaAuth = new OpenAIApi(configuration);
+
+  return oaAuth
 }
 
 /***
@@ -53,14 +85,15 @@ async function authenticateOpenAI() {
  * @param agent
  * @returns {Promise<unknown[]>}
  */
-async function getUnreadMentions(agent) {
+// @ts-ignore
+async function getUnreadMentions(agent: BskyAgent): Promise<Mention[]> {
   const response_notifs = await agent.listNotifications();
   const notifs = response_notifs.data.notifications;
 
   // Clears all existing notifications
-  await agent.updateSeenNotifications();
+  // await agent.updateSeenNotifications();
 
-  return notifs.filter((notif) => {
+  return notifs.filter((notif: any) => {
     return notif.reason === "mention" && notif.isRead === false;
   });
 }
@@ -71,7 +104,7 @@ async function getUnreadMentions(agent) {
  * @param record
  * @returns {string}
  */
-function generatePrompt(record) {
+function generatePrompt(record: any): string {
   const post_text = record.text;
   const mentions_removed = post_text.replace(/@\w+\.\w+/g, "");
 
@@ -86,7 +119,7 @@ function generatePrompt(record) {
  * @param maxLength
  * @returns {Promise<string>}
  */
-async function generateCompletion(openai, prompt, maxLength = 300) {
+async function generateCompletion(openai: OpenAIApi, prompt: string, maxLength = 300): Promise<string|undefined> {
   // OpenAI sometimes returns completions that are too long. We test each
   // completion and only return ones that are below the max character
   // count for posting.
@@ -101,8 +134,9 @@ async function generateCompletion(openai, prompt, maxLength = 300) {
     // If completion exists, take the first choice (there should be only one)
     // and make sure it's within the character count before returning it
     if (completion.data.choices && completion.data.choices.length > 0) {
-      const response = completion.data.choices[0].message.content.trim();
-      if (response.length <= maxLength) {
+      // @ts-ignore
+      const response = completion.data.choices[0].message.content.trim() ?? null;
+      if (response && (response.length <= maxLength)) {
         tooLong = false;
         return response;
       }
@@ -112,7 +146,7 @@ async function generateCompletion(openai, prompt, maxLength = 300) {
   }
 }
 
-export async function koanbot() {
+export async function koanbot(): Promise<void> {
   logger.info("Starting koanbot run...");
 
   // Authenticate with APIs and retrieve unread mentions
@@ -133,30 +167,48 @@ export async function koanbot() {
       logger.info(`Responding to ${notif.uri}`);
 
       let prompt = "";
-      let root = {};
+      // let postMeta: PostMeta;
+
+      const postMeta: PostMeta =
+          'reply' in notif.record
+              ? {
+                parent: {
+                  uri: notif.uri,
+                  cid: notif.cid,
+                },
+                root: {
+                  uri: notif.record.reply.uri,
+                  cid: notif.record.reply.cid,
+                },
+              }
+              : {
+                parent: {
+                  uri: notif.uri,
+                  cid: notif.cid,
+                },
+                root: {
+                  uri: notif.uri,
+                  cid: notif.cid,
+                },
+              }
 
       // This is redundant and should be refactored
 
       // If reply to existing thread, we need to grab
       // the URI and CID of the root post in the thread
       if ("reply" in notif.record) {
-        const post_uri = notif.record.reply.parent.uri;
+        const post_uri: string = notif.record.reply.parent.uri;
         const post_thread = await agent.getPostThread({
           uri: post_uri,
           depth: 1,
         });
-        root = notif.record.reply.root;
+
         prompt = generatePrompt(post_thread.data.thread.post.record);
 
         logger.info(prompt);
       } else {
         // Else, if this is a top-level post, do the same but
         // set root URI and CID to post URI and CID
-
-        root = {
-          uri: notif.uri,
-          cid: notif.cid,
-        };
 
         prompt = generatePrompt(notif.record);
       }
@@ -177,16 +229,7 @@ export async function koanbot() {
       if (koan) {
         await agent.post({
           text: koan,
-          reply: {
-            parent: {
-              uri: notif.uri,
-              cid: notif.cid,
-            },
-            root: {
-              uri: root.uri,
-              cid: root.cid,
-            },
-          },
+          reply: postMeta,
         });
         logger.info("Response posted. Koan returned.");
       } else {
