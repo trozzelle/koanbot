@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 
-//@ts-ignore
-import bsky, {BskyAgent} from "@atproto/api";
-import {Record} from "@atproto/api/dist/client/types/app/bsky/feed/post";
+import bsky from "@atproto/api";
+// @ts-ignore
+const { BskyAgent } = bsky
 import {Configuration, OpenAIApi} from "openai";
 import * as dotenv from "dotenv";
 import process from "node:process";
 import pino from "pino";
-// @ts-ignore
-const { BskyAgent } = bsky
 
 // Read environment variables, in .env or set elsewhere
 dotenv.config();
@@ -22,6 +20,14 @@ type Mention = {
   record: any;
   reason: string;
   isRead: boolean;
+};
+
+type CompletionChoice = {
+  message: { content: string };
+};
+
+type Completion = {
+  data: { choices: CompletionChoice[] };
 };
 
 type PostMeta = {
@@ -40,8 +46,9 @@ type PostMeta = {
  *
  * Returns authenticated agent object
  *
- * @returns {Promise<BskyAgent>}
+ * @returns {Promise<bsky.BskyAgent>}
  */
+// @ts-ignore
 async function authenticateBsky(): Promise<BskyAgent> {
   const agent = new BskyAgent({
     service: "https://bsky.social",
@@ -67,21 +74,24 @@ async function authenticateOpenAI(): Promise<OpenAIApi> {
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  return new OpenAIApi(configuration)
+  const oaAuth = new OpenAIApi(configuration);
+
+  return oaAuth
 }
 
 /***
  * Gets unread mentions from Bluesky
  *
- * @param {BskyAgent} agent
+ * @param agent
  * @returns {Promise<unknown[]>}
  */
+// @ts-ignore
 async function getUnreadMentions(agent: BskyAgent): Promise<Mention[]> {
   const response_notifs = await agent.listNotifications();
   const notifs = response_notifs.data.notifications;
 
   // Clears all existing notifications
-  await agent.updateSeenNotifications();
+  // await agent.updateSeenNotifications();
 
   return notifs.filter((notif: any) => {
     return notif.reason === "mention" && notif.isRead === false;
@@ -91,25 +101,25 @@ async function getUnreadMentions(agent: BskyAgent): Promise<Mention[]> {
 /**
  * Generates prompt from the given record
  *
- * @param {any} record - The record containing the post text
- * @returns {string} - The generated prompt
+ * @param record
+ * @returns {string}
  */
-function generatePrompt(record: Record): string {
+function generatePrompt(record: any): string {
   const post_text = record.text;
   const mentions_removed = post_text.replace(/@\w+\.\w+/g, "");
 
   return `As a wise zen master, carefully craft a zen koan based on the following text, using no more than 275 characters. Stay on topic and avoid generating any off-topic or inappropriate content:\n\n"${mentions_removed}"`;
 }
 
-/**
+/***
  * Calls OpenAI API and generates a completion from the prompt.
  *
- * @param {OpenAIApi} openai - The authenticated OpenAIApi object
- * @param {string} prompt - The prompt to be used for generating completion
- * @param {number} [maxLength=300] - The maximum length of the generated completion
- * @returns {Promise<string | undefined>} - The generated completion
+ * @param openai
+ * @param prompt
+ * @param maxLength
+ * @returns {Promise<string>}
  */
-async function generateCompletion(openai: OpenAIApi, prompt: string, maxLength = 300): Promise<string | undefined> {
+async function generateCompletion(openai: OpenAIApi, prompt: string, maxLength = 300): Promise<string|undefined> {
   // OpenAI sometimes returns completions that are too long. We test each
   // completion and only return ones that are below the max character
   // count for posting.
@@ -124,7 +134,8 @@ async function generateCompletion(openai: OpenAIApi, prompt: string, maxLength =
     // If completion exists, take the first choice (there should be only one)
     // and make sure it's within the character count before returning it
     if (completion.data.choices && completion.data.choices.length > 0) {
-      const response = completion.data.choices[0]?.message?.content.trim() ?? null;
+      // @ts-ignore
+      const response = completion.data.choices[0].message.content.trim() ?? null;
       if (response && (response.length <= maxLength)) {
         tooLong = false;
         return response;
@@ -156,6 +167,7 @@ export async function koanbot(): Promise<void> {
       logger.info(`Responding to ${notif.uri}`);
 
       let prompt = "";
+      // let postMeta: PostMeta;
 
       const postMeta: PostMeta =
           'reply' in notif.record
@@ -180,15 +192,24 @@ export async function koanbot(): Promise<void> {
                 },
               }
 
+      // This is redundant and should be refactored
+
+      // If reply to existing thread, we need to grab
+      // the URI and CID of the root post in the thread
       if ("reply" in notif.record) {
         const post_uri: string = notif.record.reply.parent.uri;
-        const post_thread: any = await agent.getPostThread({
+        const post_thread = await agent.getPostThread({
           uri: post_uri,
           depth: 1,
         });
 
         prompt = generatePrompt(post_thread.data.thread.post.record);
+
+        logger.info(prompt);
       } else {
+        // Else, if this is a top-level post, do the same but
+        // set root URI and CID to post URI and CID
+
         prompt = generatePrompt(notif.record);
       }
 
@@ -216,6 +237,7 @@ export async function koanbot(): Promise<void> {
           `WARNING: No koan returned for ${notif.uri}. koan = ${koan}`
         );
       }
+
       return;
     })
   );
@@ -223,15 +245,4 @@ export async function koanbot(): Promise<void> {
   logger.info("Completed koanbot run. Goodbye.");
 }
 
-/**
- * Main function to run koanbot
- */
-async function main(): Promise<void> {
-  try {
-    await koanbot();
-  } catch (error) {
-    logger.error("An error occurred:", error);
-  }
-}
-
-main();
+koanbot();
