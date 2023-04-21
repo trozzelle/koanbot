@@ -40,7 +40,7 @@ You are all set!
 You can start a single run by executing koanbot.js with node.
 
 ```
-node koanbot.js
+node koanbot.ts
 ```
 
 #### Running Remotely
