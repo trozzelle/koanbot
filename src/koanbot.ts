@@ -8,7 +8,7 @@ import * as dotenv from "dotenv";
 import process from "node:process";
 import pino from "pino";
 // @ts-ignore
-const { BskyAgent } = bsky
+const { BskyAgent, RichText } = bsky
 
 // Read environment variables, in .env or set elsewhere
 dotenv.config();
@@ -165,8 +165,8 @@ export async function koanbot(): Promise<void> {
                   cid: notif.cid,
                 },
                 root: {
-                  uri: notif.record.reply.uri,
-                  cid: notif.record.reply.cid,
+                  uri: notif.record.reply.root.uri,
+                  cid: notif.record.reply.root.cid,
                 },
               }
               : {
@@ -206,9 +206,18 @@ export async function koanbot(): Promise<void> {
       //    URI/CID of mention post
       //    URI/CID of first post in thread (which could be the same)
       if (koan) {
+
+        // Posts should always use RichText for encoding, otherwise the
+        // post will render in text only and symbols like emojis
+        // will get mangled.
+        const rt = new RichText({text:koan})
+        await rt.detectFacets(agent)
+
         await agent.post({
-          text: koan,
+          text: rt.text,
+          facets: rt.facets,
           reply: postMeta,
+          $type: 'app.bsky.feed.post',
         });
         logger.info("Response posted. Koan returned.");
       } else {
