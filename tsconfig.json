@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+
+    "outDir": "dist",
+    "sourceMap": true,
+
+
+    /* Language and Environment */
+    "target": "es2022",                                  /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */
+
+    /* Modules */
+    "module": "es2022",                                /* Specify what module code is generated. */
+    "moduleResolution": "node",
+    "esModuleInterop": true,                             /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables 'allowSyntheticDefaultImports' for type compatibility. */
+    "forceConsistentCasingInFileNames": true,            /* Ensure that casing is correct in imports. */
+
+    /* Type Checking */
+    "strict": true,                                      /* Enable all strict type-checking options. */
+     "noImplicitAny": true,                            /* Enable error reporting for expressions and declarations with an implied 'any' type. */
+
+    /* Completeness */
+    "skipLibCheck": true                                 /* Skip type checking all .d.ts files. */
+    // Recommended: Compiler complains about expressions implicitly typed as 'any'
+  },
+  "include": ["src/*/"], // which files to compile
+  "exclude": ["node_modules"], // which files to skip
+}
