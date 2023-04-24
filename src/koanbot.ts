@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
-import bsky from "@atproto/api";
-import oai from "openai";
+//@ts-ignore
+import bsky, {BskyAgent} from "@atproto/api";
+import {Record} from "@atproto/api/dist/client/types/app/bsky/feed/post";
+import {Configuration, OpenAIApi} from "openai";
 import * as dotenv from "dotenv";
 import process from "node:process";
 import pino from "pino";
+// @ts-ignore
+const { BskyAgent, RichText } = bsky
 
 // Read environment variables, in .env or set elsewhere
 dotenv.config();
@@ -12,15 +16,34 @@ dotenv.config();
 // Using pino for logging
 const logger = pino();
 
+type Mention = {
+  uri: string;
+  cid: string;
+  record: any;
+  reason: string;
+  isRead: boolean;
+};
+
+type PostMeta = {
+  parent: {
+    uri: string
+    cid: string
+  }
+  root: {
+    uri: string
+    cid: string
+  }
+}
+
 /**
  * Authenticates with the Bluesky API
  *
  * Returns authenticated agent object
  *
- * @returns {Promise<bsky.BskyAgent>}
+ * @returns {Promise<BskyAgent>}
  */
-async function authenticateBsky() {
-  const agent = new bsky.BskyAgent({
+async function authenticateBsky(): Promise<BskyAgent> {
+  const agent = new BskyAgent({
     service: "https://bsky.social",
   });
   await agent.login({
@@ -38,29 +61,29 @@ async function authenticateBsky() {
  *
  * @returns {Promise<OpenAIApi>}
  */
-async function authenticateOpenAI() {
-  const configuration = new oai.Configuration({
+async function authenticateOpenAI(): Promise<OpenAIApi> {
+  const configuration = new Configuration({
     organization: process.env.OPENAI_ORG,
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  return new oai.OpenAIApi(configuration);
+  return new OpenAIApi(configuration)
 }
 
 /***
  * Gets unread mentions from Bluesky
  *
- * @param agent
+ * @param {BskyAgent} agent
  * @returns {Promise<unknown[]>}
  */
-async function getUnreadMentions(agent) {
+async function getUnreadMentions(agent: BskyAgent): Promise<Mention[]> {
   const response_notifs = await agent.listNotifications();
   const notifs = response_notifs.data.notifications;
 
   // Clears all existing notifications
   await agent.updateSeenNotifications();
 
-  return notifs.filter((notif) => {
+  return notifs.filter((notif: any) => {
     return notif.reason === "mention" && notif.isRead === false;
   });
 }
@@ -68,25 +91,25 @@ async function getUnreadMentions(agent) {
 /**
  * Generates prompt from the given record
  *
- * @param record
- * @returns {string}
+ * @param {any} record - The record containing the post text
+ * @returns {string} - The generated prompt
  */
-function generatePrompt(record) {
+function generatePrompt(record: Record): string {
   const post_text = record.text;
   const mentions_removed = post_text.replace(/@\w+\.\w+/g, "");
 
   return `As a wise zen master, carefully craft a zen koan based on the following text, using no more than 275 characters. Stay on topic and avoid generating any off-topic or inappropriate content:\n\n"${mentions_removed}"`;
 }
 
-/***
+/**
  * Calls OpenAI API and generates a completion from the prompt.
  *
- * @param openai
- * @param prompt
- * @param maxLength
- * @returns {Promise<string>}
+ * @param {OpenAIApi} openai - The authenticated OpenAIApi object
+ * @param {string} prompt - The prompt to be used for generating completion
+ * @param {number} [maxLength=300] - The maximum length of the generated completion
+ * @returns {Promise<string | undefined>} - The generated completion
  */
-async function generateCompletion(openai, prompt, maxLength = 300) {
+async function generateCompletion(openai: OpenAIApi, prompt: string, maxLength = 300): Promise<string | undefined> {
   // OpenAI sometimes returns completions that are too long. We test each
   // completion and only return ones that are below the max character
   // count for posting.
@@ -101,8 +124,8 @@ async function generateCompletion(openai, prompt, maxLength = 300) {
     // If completion exists, take the first choice (there should be only one)
     // and make sure it's within the character count before returning it
     if (completion.data.choices && completion.data.choices.length > 0) {
-      const response = completion.data.choices[0].message.content.trim();
-      if (response.length <= maxLength) {
+      const response = completion.data.choices[0]?.message?.content.trim() ?? null;
+      if (response && (response.length <= maxLength)) {
         tooLong = false;
         return response;
       }
@@ -112,7 +135,7 @@ async function generateCompletion(openai, prompt, maxLength = 300) {
   }
 }
 
-export async function koanbot() {
+export async function koanbot(): Promise<void> {
   logger.info("Starting koanbot run...");
 
   // Authenticate with APIs and retrieve unread mentions
@@ -133,31 +156,39 @@ export async function koanbot() {
       logger.info(`Responding to ${notif.uri}`);
 
       let prompt = "";
-      let root = {};
 
-      // This is redundant and should be refactored
+      const postMeta: PostMeta =
+          'reply' in notif.record
+              ? {
+                parent: {
+                  uri: notif.uri,
+                  cid: notif.cid,
+                },
+                root: {
+                  uri: notif.record.reply.root.uri,
+                  cid: notif.record.reply.root.cid,
+                },
+              }
+              : {
+                parent: {
+                  uri: notif.uri,
+                  cid: notif.cid,
+                },
+                root: {
+                  uri: notif.uri,
+                  cid: notif.cid,
+                },
+              }
 
-      // If reply to existing thread, we need to grab
-      // the URI and CID of the root post in the thread
       if ("reply" in notif.record) {
-        const post_uri = notif.record.reply.parent.uri;
-        const post_thread = await agent.getPostThread({
+        const post_uri: string = notif.record.reply.parent.uri;
+        const post_thread: any = await agent.getPostThread({
           uri: post_uri,
           depth: 1,
         });
-        root = notif.record.reply.root;
+
         prompt = generatePrompt(post_thread.data.thread.post.record);
-
-        logger.info(prompt);
       } else {
-        // Else, if this is a top-level post, do the same but
-        // set root URI and CID to post URI and CID
-
-        root = {
-          uri: notif.uri,
-          cid: notif.cid,
-        };
-
         prompt = generatePrompt(notif.record);
       }
 
@@ -175,18 +206,18 @@ export async function koanbot() {
       //    URI/CID of mention post
       //    URI/CID of first post in thread (which could be the same)
       if (koan) {
+
+        // Posts should always use RichText for encoding, otherwise the
+        // post will render in text only and symbols like emojis
+        // will get mangled.
+        const rt = new RichText({text:koan})
+        await rt.detectFacets(agent)
+
         await agent.post({
-          text: koan,
-          reply: {
-            parent: {
-              uri: notif.uri,
-              cid: notif.cid,
-            },
-            root: {
-              uri: root.uri,
-              cid: root.cid,
-            },
-          },
+          text: rt.text,
+          facets: rt.facets,
+          reply: postMeta,
+          $type: 'app.bsky.feed.post',
         });
         logger.info("Response posted. Koan returned.");
       } else {
@@ -194,7 +225,6 @@ export async function koanbot() {
           `WARNING: No koan returned for ${notif.uri}. koan = ${koan}`
         );
       }
-
       return;
     })
   );
@@ -202,6 +232,15 @@ export async function koanbot() {
   logger.info("Completed koanbot run. Goodbye.");
 }
 
-koanbot();
+/**
+ * Main function to run koanbot
+ */
+async function main(): Promise<void> {
+  try {
+    await koanbot();
+  } catch (error) {
+    logger.error("An error occurred:", error);
+  }
+}
 
 main();
