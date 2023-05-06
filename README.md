@@ -20,7 +20,7 @@ cd koanbot
 Install dependencies
 
 ```shell
-pip install -r requirements.txt
+npm install
 ```
 
 Set credentials in .env or otherwise. The script requires a valid Bluesky login and an OpenAI API key.
