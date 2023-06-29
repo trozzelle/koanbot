@@ -4,7 +4,7 @@
     "dotenv": "^16.0.3",
     "node-schedule": "^2.1.1",
     "openai": "^3.2.1",
-    "pino": "^8.11.0"
+    "pino": "^8.14.1"
   },
   "devDependencies": {
     "@types/node": "^18.15.11",
