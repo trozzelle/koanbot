@@ -1,9 +1,9 @@
 {
   "dependencies": {
-    "@atproto/api": "^0.2.7",
+    "@atproto/api": "^0.13.0",
     "dotenv": "^16.0.3",
     "node-schedule": "^2.1.1",
-    "openai": "^3.2.1",
+    "openai": "^4.0.0",
     "pino": "^8.11.0"
   },
   "devDependencies": {
